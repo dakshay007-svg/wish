@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Origin Core</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #191919;            /* Notion dark background */
+    --text: #e8e8e8;
+    --muted: #8d8d8d;
+    --red: #ff3355;
+    --blue: #2f7bff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Rajdhani", "Segoe UI", system-ui, sans-serif;
+    display: grid; place-items: center;
+    padding: 12px;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .hidden { display: none !important; }
+  button { font: inherit; color: inherit; }
+
+  /* ---------- clear liquid glass card ---------- */
+  .wrap { width: 100%; max-width: 380px; }
+  .card {
+    --c1: #9fd2ff; --c2: #2f7bff;      /* orb colours follow the player's flame level */
+    --px: 0; --py: 0;
+    position: relative; isolation: isolate;
+    display: grid;
+    min-height: 450px;
+    border-radius: 26px;
+    background: rgba(18,18,24,.30);
+    -webkit-backdrop-filter: blur(18px) saturate(1.5);
+            backdrop-filter: blur(18px) saturate(1.5);
+    box-shadow: inset 0 0 44px rgba(0,0,0,.22), 0 0 34px rgba(47,123,255,.05);
+    overflow: hidden;
+    text-align: center;
+  }
+  .card::after {                          /* thin edge: blue at the top to red at the bottom, no white */
+    content: ""; position: absolute; inset: 0; border-radius: inherit; padding: 1px; pointer-events: none; z-index: 6;
+    background: linear-gradient(180deg, rgba(60,120,255,.45), rgba(60,120,255,.08) 45%, rgba(255,60,95,.08) 55%, rgba(255,60,95,.42));
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+            mask-composite: exclude;
+  }
+  /* liquid light moving inside the glass */
+  .liquid { position: absolute; inset: 0; z-index: -2; pointer-events: none; }
+  .bl { position: absolute; border-radius: 50%; filter: blur(34px); }
+  .b1 { left: -8%;  top: -10%;   width: 70%; height: 46%; background: rgba(47,123,255,.36); animation: flow1 14s ease-in-out infinite; }
+  .b2 { right: -10%; bottom: -8%; width: 74%; height: 48%; background: rgba(255,51,85,.30);  animation: flow2 17s ease-in-out infinite; }
+  .b3 { left: 28%; top: 34%;     width: 46%; height: 30%; background: rgba(120,70,255,.16); animation: flow3 21s ease-in-out infinite; }
+  @keyframes flow1 { 0%,100% { transform: translate(0,0) scale(1); }    50% { transform: translate(34%,26%) scale(1.15); } }
+  @keyframes flow2 { 0%,100% { transform: translate(0,0) scale(1); }    50% { transform: translate(-30%,-24%) scale(1.12); } }
+  @keyframes flow3 { 0%,100% { transform: translate(0,0) scale(1); }    50% { transform: translate(-26%,30%) scale(1.25); } }
+
+  .embers { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+  .ember {
+    position: absolute; bottom: -10px; border-radius: 50%;
+    background: var(--c1); box-shadow: 0 0 8px var(--c1);
+    opacity: 0;
+    animation: rise var(--dur, 12s) linear var(--del, 0s) infinite;
+  }
+  @keyframes rise { 0% { transform: translate(0,0); opacity: 0; } 12% { opacity: .75; } 80% { opacity: .35; } 100% { transform: translate(var(--dx, 10px), -470px); opacity: 0; } }
+
+  .rip { position: absolute; z-index: 5; width: 30px; height: 30px; margin: -15px 0 0 -15px; border-radius: 50%; border: 2px solid var(--c1); pointer-events: none; animation: rip .9s ease-out forwards; }
+  @keyframes rip { 0% { transform: scale(.3); opacity: .8; } 100% { transform: scale(7); opacity: 0; } }
+  .sp { position: absolute; z-index: 5; width: 5px; height: 5px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--c1); box-shadow: 0 0 8px var(--c1); pointer-events: none; animation: sp 1s cubic-bezier(.15,.7,.3,1) forwards; }
+  @keyframes sp { 0% { transform: translate(0,0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(.1); opacity: 0; } }
+
+  .title { position: absolute; top: 16px; left: 0; right: 0; z-index: 3; margin: 0; font-size: 13px; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  /* ---------- screens ---------- */
+  .screen {
+    grid-area: 1 / 1;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 46px 20px 18px;
+    opacity: 0; visibility: hidden;
+    transform: translateY(8px) scale(.98); filter: blur(6px);
+    transition: opacity .5s ease, transform .6s cubic-bezier(.2,.8,.2,1), filter .5s ease, visibility 0s linear .5s;
+  }
+  .screen.on { opacity: 1; visibility: visible; transform: none; filter: none; transition-delay: 0s; z-index: 2; }
+
+  .hint { margin: 10px 0 0; min-height: 20px; font-size: 14px; color: var(--muted); letter-spacing: .03em; transition: color .3s ease; }
+  .hint.warn { color: #ff6b86; }
+  .hint.good { color: var(--c1); }
+
+  /* ---------- the orb ---------- */
+  .orb-btn { position: relative; width: var(--o, 124px); height: var(--o, 124px); margin: 6px auto 0; padding: 0; border: 0; background: none; border-radius: 50%; cursor: pointer; outline: none; }
+  .orb-btn:focus-visible { box-shadow: 0 0 0 2px var(--blue); }
+  .orb {
+    position: absolute; inset: 0; border-radius: 50%;
+    background:
+      radial-gradient(circle at calc(38% + var(--px) * 10%) calc(32% + var(--py) * 10%), color-mix(in srgb, var(--c1) 85%, transparent) 0%, transparent 34%),
+      radial-gradient(circle at 50% 55%, var(--c1) 0%, var(--c2) 58%, color-mix(in srgb, var(--c2) 35%, #000) 100%);
+    box-shadow:
+      0 0 calc(var(--o, 124px) * .38) color-mix(in srgb, var(--c2) 75%, transparent),
+      inset -10px -14px 30px rgba(0,0,0,.38),
+      inset 8px 10px 24px color-mix(in srgb, var(--c1) 40%, transparent);
+    transform: scale(calc(1 + var(--p, 0) * .12));
+    animation: orbBreath 4.2s ease-in-out infinite;
+    transition: filter .6s ease, box-shadow .6s ease;
+  }
+  .orb::before {                           /* slow swirl inside the orb */
+    content: ""; position: absolute; inset: 6%; border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent, color-mix(in srgb, var(--c1) 55%, transparent), transparent 40%, color-mix(in srgb, var(--c2) 60%, transparent), transparent 80%);
+    -webkit-mask: radial-gradient(circle, transparent 28%, #000 62%, transparent 74%);
+            mask: radial-gradient(circle, transparent 28%, #000 62%, transparent 74%);
+    animation: swirl 9s linear infinite;
+  }
+  @keyframes swirl { to { transform: rotate(360deg); } }
+  @keyframes orbBreath { 0%,100% { filter: brightness(1); } 50% { filter: brightness(1.18); } }
+  .orb.dim { filter: saturate(.45) brightness(.62); animation: none; }
+  .orb.dim::before { animation-duration: 24s; }
+  .ring { position: absolute; inset: -14%; width: 128%; height: 128%; transform: rotate(-90deg); pointer-events: none; overflow: visible; }
+  .ring circle { fill: none; stroke-width: 3; stroke-linecap: round; }
+  .ring .track { stroke: rgba(255,255,255,.07); }
+  .ring .fill  { stroke: var(--c1); stroke-dasharray: 289; stroke-dashoffset: 289; filter: drop-shadow(0 0 6px var(--c1)); }
+  .shake { animation: shake .45s ease; }
+  @keyframes shake { 0%,100% { translate: 0 0; } 20% { translate: -6px 0; } 40% { translate: 6px 0; } 60% { translate: -4px 0; } 80% { translate: 3px 0; } }
+
+  /* ---------- text ---------- */
+  textarea {
+    width: 100%; resize: none;
+    padding: 11px 13px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,255,255,.07);
+    background: rgba(10,10,14,.42);
+    color: var(--text);
+    font: inherit; font-size: 17px; line-height: 1.3;
+    outline: none;
+    transition: border-color .25s ease, box-shadow .25s ease;
+  }
+  textarea:focus { border-color: #4a6fd6; box-shadow: 0 0 0 3px rgba(47,123,255,.16); }
+  textarea::placeholder { color: #6e6e76; }
+  .count { align-self: flex-end; margin-top: 4px; font-size: 12px; color: #6f6f78; letter-spacing: .06em; }
+
+  .reason {
+    margin: 14px 0 0; padding: 0 4px;
+    font-size: 22px; font-weight: 600; line-height: 1.32;
+    color: var(--c1);
+    text-shadow: 0 0 18px color-mix(in srgb, var(--c2) 60%, transparent);
+    overflow-wrap: anywhere;
+  }
+  .w { display: inline-block; white-space: nowrap; margin-right: .28em; }
+  .c { display: inline-block; animation: ember .95s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--d, 0s); }
+  @keyframes ember {
+    0%   { opacity: 0; transform: translateY(9px) scale(.88); filter: blur(5px); color: #ff9a4a; text-shadow: 0 0 16px #ff7a2a; }
+    55%  { opacity: 1; filter: blur(0); color: #ffb870; text-shadow: 0 0 14px #ff8a3a; }
+    100% { opacity: 1; transform: none; filter: blur(0); }
+  }
+  .kept-line { margin: 12px 0 0; font-size: 14px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  .kept-line b { color: var(--c1); font-family: "Orbitron", sans-serif; font-size: 15px; letter-spacing: 0; }
+
+  /* ---------- home ---------- */
+  .kept { margin-top: 12px; }
+  .kept b {
+    display: block;
+    font-family: "Orbitron", "Rajdhani", sans-serif; font-weight: 900; font-size: 38px; line-height: 1;
+    background: linear-gradient(180deg, var(--c1), var(--c2));
+    -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;
+    filter: drop-shadow(0 0 10px color-mix(in srgb, var(--c2) 55%, transparent));
+  }
+  .kept span { font-size: 13px; letter-spacing: .3em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+  .letters { display: flex; justify-content: center; gap: 14px; margin-top: 14px; }
+  .env {
+    --e1: #9fd2ff; --e2: #2f7bff;
+    position: relative; width: 62px; padding: 8px 0 6px;
+    border-radius: 14px;
+    border: 1px solid color-mix(in srgb, var(--e2) 35%, transparent);
+    background: rgba(10,10,14,.38);
+    cursor: pointer;
+    transition: transform .15s ease, border-color .3s ease, box-shadow .3s ease, opacity .3s ease;
+  }
+  .env:hover { transform: translateY(-2px); }
+  .env:active { transform: scale(.96); }
+  .env:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+  .env svg { display: block; width: 26px; height: 26px; margin: 0 auto 2px; color: var(--e1); }
+  .env em { display: block; font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+  .env.empty { border-style: dashed; opacity: .6; }
+  .env.empty svg { color: #7d7d86; }
+  .env.sealed { border-color: color-mix(in srgb, var(--e2) 55%, transparent); box-shadow: 0 0 14px color-mix(in srgb, var(--e2) 22%, transparent); }
+  .env.ready  { border-color: var(--e1); box-shadow: 0 0 20px color-mix(in srgb, var(--e2) 55%, transparent); animation: ready 1.8s ease-in-out infinite; }
+  .env.ready em { color: var(--e1); }
+  .env.opened { opacity: .75; }
+  .env.opened svg { color: color-mix(in srgb, var(--e1) 70%, #888); }
+  @keyframes ready { 0%,100% { box-shadow: 0 0 10px color-mix(in srgb, var(--e2) 35%, transparent); } 50% { box-shadow: 0 0 26px color-mix(in srgb, var(--e2) 80%, transparent); } }
+
+  .ghost {
+    margin-top: 14px; padding: 8px 16px;
+    border-radius: 12px; border: 1px solid rgba(255,255,255,.08);
+    background: rgba(10,10,14,.35);
+    font-size: 14px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #a8a8b0;
+    cursor: pointer; transition: color .2s ease, border-color .2s ease, transform .15s ease;
+  }
+  .ghost:hover { color: #fff; border-color: #4a6fd6; }
+  .ghost:active { transform: scale(.97); }
+  .ghost.rescue { color: #ff7d92; border-color: rgba(255,51,85,.35); }
+  .ghost.rescue:hover { color: #fff; border-color: #ff3355; box-shadow: 0 0 18px rgba(255,51,85,.25); }
+  .primary {
+    margin-top: 14px; padding: 11px 24px; width: 100%;
+    border: 0; border-radius: 12px;
+    font-size: 17px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: #fff;
+    background: linear-gradient(135deg, var(--blue), var(--red));
+    box-shadow: 0 6px 22px rgba(47,123,255,.28);
+    cursor: pointer; transition: transform .15s ease, box-shadow .2s ease;
+  }
+  .primary:hover { transform: translateY(-1px); box-shadow: 0 9px 28px rgba(255,51,85,.30); }
+  .primary:active { transform: scale(.99); }
+  .row { display: flex; gap: 10px; justify-content: center; width: 100%; }
+  .row .ghost { margin-top: 14px; }
+  .hold-btn { position: relative; overflow: hidden; isolation: isolate; }
+  .hold-btn::before { content: ""; position: absolute; inset: 0; z-index: -1; width: calc(var(--hp, 0) * 100%); background: linear-gradient(90deg, rgba(47,123,255,.45), rgba(255,51,85,.45)); }
+  .spacer { flex: 1; }
+
+  .sub { margin: 4px 0 8px; font-size: 14px; color: var(--muted); }
+  .h2 { margin: 6px 0 0; font-size: 22px; font-weight: 700; letter-spacing: .04em; color: var(--text); }
+  .letter-text { margin: 16px 0 0; padding: 0 6px; font-size: 20px; font-weight: 600; line-height: 1.35; color: var(--c1); text-shadow: 0 0 16px color-mix(in srgb, var(--c2) 55%, transparent); overflow-wrap: anywhere; }
+
+  /* ---------- rescue ---------- */
+  .breath-wrap { position: relative; width: 150px; height: 150px; margin: 16px 0 6px; display: grid; place-items: center; }
+  .breath-wrap .orb-btn { --o: 96px; margin: 0; cursor: default; }
+  .breath-wrap .orb-btn .orb { transition: transform var(--bt, 4s) ease-in-out; animation: none; transform: scale(var(--bs, 1)); }
+  .phase { margin: 10px 0 0; font-size: 26px; font-weight: 700; letter-spacing: .08em; color: var(--c1); text-shadow: 0 0 16px color-mix(in srgb, var(--c2) 55%, transparent); min-height: 34px; }
+  .secs { margin: 4px 0 0; font-size: 14px; color: var(--muted); letter-spacing: .12em; text-transform: uppercase; }
+
+  .flight { position: absolute; z-index: 7; left: 0; top: 0; width: 280px; margin: 0; font-size: 17px; font-weight: 600; line-height: 1.3; color: var(--c1); text-shadow: 0 0 14px var(--c2); pointer-events: none; transform-origin: center; transition: transform 1s cubic-bezier(.6,0,.3,1), opacity 1s ease, filter 1s ease; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<main class="card" id="card">
+  <div class="liquid"><i class="bl b1"></i><i class="bl b2"></i><i class="bl b3"></i></div>
+  <div class="embers" id="embers"></div>
+  <p class="title">Origin Core</p>
+
+  <!-- 1. write and seal your reason -->
+  <section class="screen" id="sSetup">
+    <button class="orb-btn" id="orbSetup" type="button" aria-label="Press and hold to seal your reason">
+      <svg class="ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="track" cx="50" cy="50" r="46"/><circle class="fill" id="ringSetup" cx="50" cy="50" r="46"/></svg>
+      <span class="orb dim" id="orbSetupBall"></span>
+    </button>
+    <p class="hint" id="setupHint">Press and hold the orb to seal your reason</p>
+    <textarea id="whyIn" rows="3" maxlength="160" placeholder="Why did you really start? One honest sentence."></textarea>
+    <div class="count" id="whyCount">0 / 160</div>
+    <button class="ghost hidden" id="setupCancel" type="button">Cancel</button>
+  </section>
+
+  <!-- 2. home -->
+  <section class="screen" id="sHome">
+    <button class="orb-btn" id="orbHome" type="button" aria-label="Tap to remember why you started"><span class="orb"></span></button>
+    <p class="hint" id="homeHint">Tap the orb to remember</p>
+    <div class="kept"><b id="keptN">1</b><span id="keptLbl">day promised</span></div>
+    <div class="letters" id="letters"></div>
+    <button class="ghost rescue" id="rescueBtn" type="button">I want to quit</button>
+  </section>
+
+  <!-- 3. reveal -->
+  <section class="screen" id="sReveal">
+    <button class="orb-btn" type="button" tabindex="-1" aria-hidden="true" style="--o:64px;cursor:default"><span class="orb"></span></button>
+    <p class="reason" id="whyText"></p>
+    <p class="kept-line">Kept for <b id="keptN2">1</b> <span id="keptLbl2">day</span></p>
+    <span class="spacer"></span>
+    <div class="row">
+      <button class="ghost" id="revBack" type="button">Back</button>
+      <button class="ghost hold-btn" id="revEdit" type="button">Hold to edit</button>
+    </div>
+  </section>
+
+  <!-- 4. write a letter -->
+  <section class="screen" id="sLetter">
+    <p class="h2" id="letterTitle">Letter to Day 10 you</p>
+    <p class="sub" id="letterSub">Opens when your streak reaches day 10.</p>
+    <textarea id="letterIn" rows="6" maxlength="240" placeholder="Write something only future you will read…"></textarea>
+    <div class="count" id="letterCount">0 / 240</div>
+    <span class="spacer"></span>
+    <button class="primary" id="letterSave" type="button">Seal letter</button>
+    <button class="ghost" id="letterBack" type="button">Back</button>
+  </section>
+
+  <!-- 5. read a letter -->
+  <section class="screen" id="sRead">
+    <button class="orb-btn" type="button" tabindex="-1" aria-hidden="true" style="--o:64px;cursor:default"><span class="orb"></span></button>
+    <p class="sub" id="readSub" style="margin-top:12px">A letter from past you</p>
+    <p class="letter-text" id="readText"></p>
+    <span class="spacer"></span>
+    <button class="ghost" id="readBack" type="button">Back</button>
+  </section>
+
+  <!-- 6. rescue: breathe -->
+  <section class="screen" id="sRescue">
+    <p class="sub" style="margin-top:6px">Stay with me for one minute.</p>
+    <div class="breath-wrap"><button class="orb-btn" type="button" tabindex="-1" aria-hidden="true"><span class="orb" id="breathOrb"></span></button></div>
+    <p class="phase" id="phase">Breathe in</p>
+    <p class="secs"><span id="secsLeft">60</span> seconds</p>
+    <span class="spacer"></span>
+    <button class="ghost" id="rescueSkip" type="button">Skip</button>
+  </section>
+
+  <!-- 7. rescue: after -->
+  <section class="screen" id="sAfter">
+    <p class="h2" style="margin-top:22px">You're still here.</p>
+    <p class="reason" id="afterText"></p>
+    <p class="kept-line">Kept for <b id="keptN3">1</b> <span id="keptLbl3">day</span></p>
+    <span class="spacer"></span>
+    <button class="primary" id="afterGo" type="button">Keep going</button>
+  </section>
+</main>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ============ settings you may want to change ============ */
+  var STORAGE_KEY = "wod-why-v1";
+  var FLAME_KEY = "wod-flame-v1";          // the streak flame widget's saved streak (read only)
+  var MAX_REASON = 160, MAX_LETTER = 240;
+  var SEAL_HOLD_MS = 3000;                 // press and hold to seal the reason
+  var EDIT_HOLD_MS = 2500;                 // press and hold to edit the reason
+  var BREATH_SECONDS = 60;
+  // letters unlock at these streak days (one a month); c1 -> c2 is the colour of that letter
+  var LETTERS = [
+    { day: 30, c1: "#ff4d6d", c2: "#b030ff" },
+    { day: 60, c1: "#ffd36b", c2: "#ff5a2a" },
+    { day: 90, c1: "#ffe08a", c2: "#ff2d55" }
+  ];
+  // orb colour by flame level (1 = blue ... 5 = golden fire)
+  var LEVEL_COLORS = [
+    null,
+    { c1: "#9fd2ff", c2: "#2f7bff" },
+    { c1: "#7a9bff", c2: "#1a2fbf" },
+    { c1: "#ff5a6e", c2: "#2f6bff" },
+    { c1: "#ff4d6d", c2: "#b030ff" },
+    { c1: "#ffd36b", c2: "#ff5a2a" }
+  ];
+  /* ========================================================= */
+
+  var $ = function (id) { return document.getElementById(id); };
+  var card = $("card");
+  var screens = { setup: $("sSetup"), home: $("sHome"), reveal: $("sReveal"), letter: $("sLetter"), read: $("sRead"), rescue: $("sRescue"), after: $("sAfter") };
+  var current = null;
+
+  /* ---------- saved data (safe if the browser blocks storage) ---------- */
+  var memory = null;
+  function blank() { return { reason: "", sealed: "", letters: {}, opened: {} }; }
+  function load() {
+    try {
+      var raw = window.localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var o = JSON.parse(raw);
+        if (o && typeof o === "object") {
+          var s = blank();
+          if (typeof o.reason === "string") s.reason = o.reason.slice(0, MAX_REASON);
+          if (typeof o.sealed === "string") s.sealed = o.sealed;
+          if (o.letters && typeof o.letters === "object") LETTERS.forEach(function (L) { if (typeof o.letters[L.day] === "string") s.letters[L.day] = o.letters[L.day].slice(0, MAX_LETTER); });
+          if (o.opened && typeof o.opened === "object") LETTERS.forEach(function (L) { if (o.opened[L.day] === true) s.opened[L.day] = true; });
+          return s;
+        }
+      }
+    } catch (e) { if (memory) return memory; }
+    return memory || blank();
+  }
+  function save() { memory = state; try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {} }
+  var state = load();
+
+  /* ---------- the flame widget's streak (same site, same browser) ---------- */
+  function flameInfo() {
+    try {
+      var raw = window.localStorage.getItem(FLAME_KEY);
+      if (!raw) return null;
+      var f = JSON.parse(raw);
+      if (f && f.started === true) return { streak: Math.max(0, parseInt(f.streak, 10) || 0), best: Math.max(0, parseInt(f.best, 10) || 0) };
+    } catch (e) {}
+    return null;
+  }
+
+  /* ---------- dates ---------- */
+  function pad(n) { return n < 10 ? "0" + n : "" + n; }
+  function todayStr() { var d = new Date(); return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()); }
+  function dayNum(str) { var p = str.split("-"); return Date.UTC(+p[0], +p[1] - 1, +p[2]) / 864e5; }
+  function keptDays() { if (!state.sealed) return 1; return Math.max(1, Math.round(dayNum(todayStr()) - dayNum(state.sealed)) + 1); }
+  // how far the player has come: the flame's best streak if there is a flame, otherwise days since sealing
+  function progress() { var f = flameInfo(); return f ? Math.max(f.best, f.streak) : keptDays(); }
+
+  /* ---------- colours follow the flame level ---------- */
+  function setPalette() {
+    var f = flameInfo(), lvl = 1;
+    if (f) { if (f.streak >= 50) lvl = 5; else if (f.streak >= 30) lvl = 4; else if (f.streak >= 20) lvl = 3; else if (f.streak >= 10) lvl = 2; }
+    card.style.setProperty("--c1", LEVEL_COLORS[lvl].c1);
+    card.style.setProperty("--c2", LEVEL_COLORS[lvl].c2);
+  }
+
+  /* ---------- screens ---------- */
+  function show(name) {
+    current = name;
+    for (var k in screens) screens[k].classList.toggle("on", k === name);
+  }
+
+  /* ---------- effects ---------- */
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function ripple(x, y) {
+    var r = document.createElement("span"); r.className = "rip";
+    r.style.left = x + "px"; r.style.top = y + "px";
+    r.addEventListener("animationend", function () { r.remove(); });
+    card.appendChild(r);
+  }
+  function sparks(x, y, n) {
+    if (reduce) return;
+    for (var i = 0; i < n; i++) {
+      var s = document.createElement("span"); s.className = "sp";
+      var a = Math.random() * Math.PI * 2, d = 50 + Math.random() * 110;
+      s.style.left = x + "px"; s.style.top = y + "px";
+      s.style.setProperty("--dx", Math.cos(a) * d + "px"); s.style.setProperty("--dy", Math.sin(a) * d + "px");
+      s.addEventListener("animationend", function (e) { e.target.remove(); });
+      card.appendChild(s);
+    }
+  }
+  function centerOf(el) {
+    var cr = card.getBoundingClientRect(), r = el.getBoundingClientRect();
+    return { x: r.left - cr.left + r.width / 2, y: r.top - cr.top + r.height / 2 };
+  }
+  card.addEventListener("pointerdown", function (e) {
+    var cr = card.getBoundingClientRect(); ripple(e.clientX - cr.left, e.clientY - cr.top);
+  });
+  card.addEventListener("pointermove", function (e) {
+    if (e.pointerType === "touch") return;
+    var cr = card.getBoundingClientRect();
+    card.style.setProperty("--px", (((e.clientX - cr.left) / cr.width) * 2 - 1).toFixed(2));
+    card.style.setProperty("--py", (((e.clientY - cr.top) / cr.height) * 2 - 1).toFixed(2));
+  });
+
+  // drifting embers inside the glass
+  (function () {
+    var host = $("embers");
+    for (var i = 0; i < 16; i++) {
+      var e = document.createElement("i"); e.className = "ember";
+      var s = 2 + Math.random() * 3;
+      e.style.left = (4 + Math.random() * 92) + "%";
+      e.style.width = e.style.height = s + "px";
+      e.style.setProperty("--dur", (9 + Math.random() * 9) + "s");
+      e.style.setProperty("--del", (-Math.random() * 18) + "s");
+      e.style.setProperty("--dx", (Math.random() * 40 - 20) + "px");
+      host.appendChild(e);
+    }
+  })();
+
+  // text that appears letter by letter like embers
+  function emberText(el, text) {
+    el.textContent = "";
+    var words = text.split(/\s+/).filter(Boolean), n = 0, total = text.length;
+    var step = Math.min(42, 2600 / Math.max(total, 1));
+    words.forEach(function (w) {
+      var ws = document.createElement("span"); ws.className = "w";
+      for (var i = 0; i < w.length; i++) {
+        var c = document.createElement("span"); c.className = "c"; c.textContent = w[i];
+        c.style.setProperty("--d", (n * step) + "ms"); n++;
+        ws.appendChild(c);
+      }
+      n++;
+      el.appendChild(ws);
+    });
+  }
+
+  /* ---------- press-and-hold helper ---------- */
+  function makeHold(el, ms, onProgress, onDone) {
+    var raf = 0, t0 = 0, active = false;
+    function step(t) {
+      if (!active) return;
+      var p = Math.min(1, (t - t0) / ms);
+      onProgress(p);
+      if (p >= 1) { active = false; onProgress(0); onDone(); return; }
+      raf = requestAnimationFrame(step);
+    }
+    function start(e) {
+      if (e && e.type === "keydown") { if (e.repeat) return; e.preventDefault(); }
+      if (active) return;
+      active = true; t0 = performance.now(); raf = requestAnimationFrame(step);
+    }
+    function stop() { if (!active) return; active = false; cancelAnimationFrame(raf); onProgress(0); }
+    el.addEventListener("pointerdown", start);
+    ["pointerup", "pointerleave", "pointercancel"].forEach(function (ev) { el.addEventListener(ev, stop); });
+    el.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") start(e); });
+    el.addEventListener("keyup", function (e) { if (e.key === "Enter" || e.key === " ") stop(); });
+    el.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  }
+
+  var hintTimer = null;
+  function say(el, text, cls, ms, back) {
+    clearTimeout(hintTimer);
+    el.textContent = text; el.className = "hint" + (cls ? " " + cls : "");
+    if (ms) hintTimer = setTimeout(function () { el.textContent = back; el.className = "hint"; }, ms);
+  }
+
+  /* ---------- setup / seal ---------- */
+  var whyIn = $("whyIn"), whyCount = $("whyCount"), setupHint = $("setupHint"), orbSetup = $("orbSetup"), orbSetupBall = $("orbSetupBall"), ringSetup = $("ringSetup");
+  var editing = false;
+  var SETUP_TEXT = "Press and hold the orb to seal your reason";
+
+  whyIn.addEventListener("input", function () { whyCount.textContent = whyIn.value.length + " / " + MAX_REASON; });
+
+  function openSetup(prefill) {
+    editing = !!prefill;
+    whyIn.value = prefill || ""; whyCount.textContent = whyIn.value.length + " / " + MAX_REASON;
+    $("setupCancel").classList.toggle("hidden", !editing);
+    SETUP_TEXT = editing ? "Hold the orb to seal your new reason" : "Press and hold the orb to seal your reason";
+    setupHint.textContent = SETUP_TEXT; setupHint.className = "hint";
+    orbSetupBall.classList.add("dim");
+    show("setup");
+  }
+  $("setupCancel").addEventListener("click", function () { renderHome(); show("home"); });
+
+  makeHold(orbSetup, SEAL_HOLD_MS, function (p) {
+    ringSetup.style.strokeDashoffset = String(289 * (1 - p));
+    orbSetup.style.setProperty("--p", p);
+    orbSetupBall.classList.toggle("dim", p < 0.05);
+    orbSetupBall.style.setProperty("--p", p);
+    orbSetup.style.setProperty("--p", p);
+  }, function () {
+    var text = whyIn.value.replace(/\s+/g, " ").trim();
+    if (text.length < 3) {
+      orbSetup.classList.remove("shake"); void orbSetup.offsetWidth; orbSetup.classList.add("shake");
+      say(setupHint, "Write your reason first, then hold the orb.", "warn", 3200, SETUP_TEXT);
+      orbSetupBall.classList.add("dim");
+      return;
+    }
+    seal(text);
+  });
+  // the orb scale uses --p on the orb element
+  orbSetupBall.style.setProperty("--p", 0);
+
+  function seal(text) {
+    state.reason = text;
+    if (!state.sealed) state.sealed = todayStr();
+    save();
+    // the words fly into the orb
+    var fl = document.createElement("p"); fl.className = "flight"; fl.textContent = text;
+    var cr = card.getBoundingClientRect(), tr = whyIn.getBoundingClientRect(), oc = centerOf(orbSetup);
+    var fx = tr.left - cr.left + tr.width / 2 - 140, fy = tr.top - cr.top + tr.height / 2 - 14;
+    fl.style.left = fx + "px"; fl.style.top = fy + "px";
+    card.appendChild(fl);
+    whyIn.style.transition = "opacity .5s ease"; whyIn.style.opacity = "0";
+    void fl.offsetWidth;
+    fl.style.transform = "translate(" + (oc.x - (fx + 140)) + "px," + (oc.y - (fy + 14)) + "px) scale(.05)";
+    fl.style.opacity = "0"; fl.style.filter = "blur(6px)";
+    setTimeout(function () {
+      sparks(oc.x, oc.y, 46); ripple(oc.x, oc.y);
+      orbSetupBall.classList.remove("dim");
+    }, 850);
+    setTimeout(function () {
+      fl.remove(); whyIn.style.opacity = ""; whyIn.style.transition = "";
+      renderHome(); show("home");
+      say($("homeHint"), "Sealed. Your why is safe inside.", "good", 4200, "Tap the orb to remember");
+    }, 1500);
+  }
+
+  /* ---------- home ---------- */
+  var ENV_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 10l9-6 9 6v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3 10l9 6 9-6"/></svg>';
+  var ENV_SHUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></svg>';
+  var ENV_LOCK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+  var ENV_PLUS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg>';
+
+  function plural(n) { return n === 1 ? "day" : "days"; }
+
+  function renderHome() {
+    setPalette();
+    var k = keptDays();
+    $("keptN").textContent = k; $("keptLbl").textContent = plural(k) + " promised";
+    var prog = progress(), box = $("letters");
+    box.textContent = "";
+    LETTERS.forEach(function (L) {
+      var has = !!state.letters[L.day], unlocked = prog >= L.day, opened = !!state.opened[L.day];
+      var cls = "empty", icon = ENV_PLUS, label = "Write a letter for day " + L.day;
+      if (has && unlocked && !opened) { cls = "ready"; icon = ENV_SHUT; label = "Open your letter from day " + L.day; }
+      else if (has && unlocked && opened) { cls = "opened"; icon = ENV_OPEN; label = "Read your letter again"; }
+      else if (has) { cls = "sealed"; icon = ENV_LOCK; label = "Letter sealed until day " + L.day + ". Hold to rewrite it."; }
+      var b = document.createElement("button");
+      b.type = "button"; b.className = "env " + cls; b.setAttribute("aria-label", label); b.title = label;
+      var locked = has && !unlocked;
+      b.style.setProperty("--e1", locked ? "#8fb0ff" : L.c1); b.style.setProperty("--e2", locked ? "#2f6bff" : L.c2);
+      b.innerHTML = icon + "<em>Day " + L.day + "</em>";
+      b.addEventListener("click", function () {
+        if (b.dataset.held) { delete b.dataset.held; return; }      // a long press just finished
+        onEnvelope(L, has, unlocked);
+      });
+      if (locked) {                                                  // hold to rewrite a sealed letter
+        b.classList.add("hold-btn");
+        makeHold(b, EDIT_HOLD_MS, function (p) { b.style.setProperty("--hp", p); }, function () { b.dataset.held = "1"; openLetterEditor(L, false, true); });
+      }
+      box.appendChild(b);
+    });
+  }
+
+  function onEnvelope(L, has, unlocked) {
+    if (has && unlocked) { openRead(L); return; }
+    if (has) {                                                       // sealed: it stays closed until its day
+      var left = Math.max(1, L.day - progress());
+      say($("homeHint"), "Sealed until day " + L.day + " · " + left + " day" + (left === 1 ? "" : "s") + " to go", "", 4200, "Tap the orb to remember");
+      return;
+    }
+    openLetterEditor(L, unlocked, false);
+  }
+
+  $("orbHome").addEventListener("click", function () {
+    var oc = centerOf($("orbHome")); sparks(oc.x, oc.y, 14);
+    $("keptN2").textContent = keptDays(); $("keptLbl2").textContent = plural(keptDays());
+    show("reveal");
+    emberText($("whyText"), state.reason);
+  });
+  $("revBack").addEventListener("click", function () { show("home"); });
+
+  var revEdit = $("revEdit");
+  makeHold(revEdit, EDIT_HOLD_MS, function (p) { revEdit.style.setProperty("--hp", p); }, function () { openSetup(state.reason); });
+
+  /* ---------- letters ---------- */
+  var letterDay = null;
+  var letterIn = $("letterIn");
+  letterIn.addEventListener("input", function () { $("letterCount").textContent = letterIn.value.length + " / " + MAX_LETTER; });
+
+  var rewriting = false;
+  function openLetterEditor(L, unlocked, rewrite) {
+    letterDay = L; rewriting = !!rewrite;
+    $("letterTitle").textContent = "Letter to Day " + L.day + " you";
+    $("letterSub").textContent = rewrite ? "Writing a new letter replaces the sealed one." : (unlocked ? "You already reached day " + L.day + ". Write it, then open it." : "Sealed until your streak reaches day " + L.day + ".");
+    letterIn.value = "";                                              // a sealed letter is never shown again
+    $("letterCount").textContent = letterIn.value.length + " / " + MAX_LETTER;
+    show("letter");
+  }
+  $("letterSave").addEventListener("click", function () {
+    var t = letterIn.value.replace(/[ \t]+/g, " ").trim();
+    if (t) { state.letters[letterDay.day] = t; delete state.opened[letterDay.day]; }
+    else if (!rewriting) delete state.letters[letterDay.day];       // blank while rewriting keeps the old letter
+    save();
+    var oc = centerOf($("letterSave")); ripple(oc.x, oc.y);
+    renderHome(); show("home");
+    say($("homeHint"), t ? "Letter sealed for day " + letterDay.day + "." : (rewriting ? "Your sealed letter is unchanged." : "Nothing written."), "good", 3600, "Tap the orb to remember");
+  });
+  $("letterBack").addEventListener("click", function () { show("home"); });
+
+  function openRead(L) {
+    state.opened[L.day] = true; save();
+    card.style.setProperty("--c1", L.c1); card.style.setProperty("--c2", L.c2);   // the letter glows in its own flame colour
+    $("readSub").textContent = "A letter from past you · Day " + L.day;
+    show("read");
+    var oc = { x: card.clientWidth / 2, y: 120 };
+    sparks(oc.x, oc.y, 50); ripple(oc.x, oc.y);
+    emberText($("readText"), state.letters[L.day]);
+  }
+  $("readBack").addEventListener("click", function () { setPalette(); renderHome(); show("home"); });
+
+  /* ---------- rescue ---------- */
+  var breathOrb = $("breathOrb"), phaseEl = $("phase"), secsEl = $("secsLeft");
+  var rescueTimers = [], rescueTick = null, rescueEnd = 0;
+
+  function stopRescue() {
+    rescueTimers.forEach(clearTimeout); rescueTimers = [];
+    clearInterval(rescueTick); rescueTick = null;
+  }
+  function phaseSeq() {
+    // breathe in 4s, hold 4s, breathe out 6s
+    var seq = [], t = 0;
+    while (t < BREATH_SECONDS * 1000) {
+      seq.push({ at: t, text: "Breathe in", dur: 4, scale: 1.55 });
+      seq.push({ at: t + 4000, text: "Hold", dur: 4, scale: 1.55 });
+      seq.push({ at: t + 8000, text: "Breathe out", dur: 6, scale: 1 });
+      t += 14000;
+    }
+    return seq;
+  }
+  function startRescue() {
+    stopRescue(); setPalette();
+    show("rescue");
+    var t0 = Date.now(); rescueEnd = t0 + BREATH_SECONDS * 1000;
+    breathOrb.style.setProperty("--bs", 1); breathOrb.style.setProperty("--bt", "0s");
+    phaseEl.textContent = "Get ready"; secsEl.textContent = BREATH_SECONDS;
+    phaseSeq().forEach(function (p) {
+      rescueTimers.push(setTimeout(function () {
+        phaseEl.textContent = p.text;
+        breathOrb.style.setProperty("--bt", p.dur + "s");
+        breathOrb.style.setProperty("--bs", p.scale);
+      }, 700 + p.at));
+    });
+    rescueTimers.push(setTimeout(finishRescue, BREATH_SECONDS * 1000 + 700));
+    rescueTick = setInterval(function () { secsEl.textContent = Math.max(0, Math.ceil((rescueEnd + 700 - Date.now()) / 1000)); }, 250);
+  }
+  function finishRescue() {
+    stopRescue();
+    var k = keptDays();
+    $("keptN3").textContent = k; $("keptLbl3").textContent = plural(k);
+    show("after");
+    emberText($("afterText"), state.reason);
+    var oc = { x: card.clientWidth / 2, y: 150 }; sparks(oc.x, oc.y, 36); ripple(oc.x, oc.y);
+  }
+  $("rescueBtn").addEventListener("click", startRescue);
+  $("rescueSkip").addEventListener("click", finishRescue);
+  $("afterGo").addEventListener("click", function () { renderHome(); show("home"); });
+
+  /* ---------- go ---------- */
+  setPalette();
+  if (state.reason) { renderHome(); show("home"); } else { openSetup(""); }
+
+  // pick up a flame level change / new unlocked letters when the player comes back to the tab
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "visible" && current === "home") renderHome();
+  });
+})();
+</script>
+</body>
+</html>
